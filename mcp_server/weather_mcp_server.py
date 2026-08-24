@@ -136,6 +136,15 @@ def get_forecast(location: str, days: int = 7) -> dict:
     tools take "zaterdag" or "weekend" as their `day` argument and resolve it
     against the Dutch calendar themselves, which is safer than counting days in
     your head.
+
+    Every day is a separate row, and `description`, `sun_chance_pct` and the
+    temperatures belong to *that* row only. Quote the description of the date you
+    were asked about, verbatim and translated by nobody — not a summary of it,
+    and never the neighbouring day's. Measured failure: asked about tomorrow, a
+    model reported "vrijwel zonnig", which was today's row ("Vrijwel onbewolkt
+    (zonnig/helder)"); tomorrow said "Mix van opklaringen en hoge bewolking" at
+    39% sun. The figures were right and the sky was wrong, which is the hardest
+    kind of answer to catch.
     A day with is_partial=true is today with only some hours left, so its
     min/max covers less than a full day — say so before comparing it with
     another day.
@@ -291,7 +300,15 @@ def find_activities(location: str, query: str | None = None, radius_km: int = 25
     a zoo with indoor houses — appear in both lists rather than in neither.
 
     `lead_with` says which list the weather favours ('indoor', 'outdoor' or
-    'both'); lead with that one and still mention the other. Only name venues
+    'both'); lead with that one and still mention the other.
+
+    Check `waarschijnlijk_open` before you recommend a venue. It reads the
+    venue's own opening hours against the date asked about: false means those
+    hours exclude that day — do not offer it, or say plainly that it is closed
+    then — and null means the hours are unknown, which is most venues and worth
+    saying out loud ("openingstijden staan er niet bij, check even de website")
+    rather than papering over. Public holidays are not accounted for. `weekday`
+    gives the day in Dutch so you can name it. Only name venues
     that appear in the lists — an empty list means nothing is known within the
     radius, not that there is nothing there. Say that, and offer a larger radius,
     rather than filling the gap from memory.
@@ -315,6 +332,14 @@ def find_activities(location: str, query: str | None = None, radius_km: int = 25
             venue descriptions) instead of by distance; omit it to get the
             nearest venues. Pass the visitor's own words — the ranking is better
             with them than with a keyword you distilled.
+
+            Omit it entirely when they have not said what they want. "wat kunnen
+            we doen?" carries no preference, and passing a word like "binnen" or
+            "activiteit" is worse than passing nothing: those are not content
+            words, so the search matches venue descriptions that happen to
+            contain them instead of ranking on what somebody wants to do.
+            Shelter is already handled — the two lists and `lead_with` do that —
+            so an indoor day is not a reason to put "binnen" in the query.
         radius_km: Search radius, 1-50 (default 25, clamped).
         day: A weekday ("zaterdag"), "weekend", "vandaag", "morgen", an ISO date,
             or omitted for today; the word the user said is fine.

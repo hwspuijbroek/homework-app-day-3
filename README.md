@@ -40,7 +40,7 @@ waard als er iets te tonen valt dat de agent zelf niet toont.
 | `get_outdoor_advice(location, day)` | **Het oordeel**: binnen, buiten of gemengd, met de reden | verdict.py |
 | `get_best_day(location)` | De dagen gerangschikt op geschiktheid om eropuit te gaan | verdict.py |
 | `get_rain_timing(location, day)` | Per uur: wanneer het regent, en hoeveel | Buienradar |
-| `find_activities(location, query, radius_km, day, limit)` | Uitjes in de buurt, gesplitst op binnen/buiten en gekoppeld aan het weeroordeel | Lakebase + Buienradar |
+| `find_activities(location, query, radius_km, day, limit)` | Uitjes in de buurt, gesplitst op binnen/buiten, gekoppeld aan het weeroordeel én aan de openingstijden van die dag | Lakebase + Buienradar |
 
 De opdracht vraagt om minimaal drie tools waarvan één een afgeleid oordeel is. Dat
 is `get_outdoor_advice`, en het is geen doorgeefluik:
@@ -60,6 +60,27 @@ is `get_outdoor_advice`, en het is geen doorgeefluik:
 De drempelwaarden en de redenering erachter staan in
 [verdict.py](mcp_server/verdict.py); ze zijn overgenomen uit Day 2, waar ze tegen
 twee weken echte Buienradar-output zijn afgesteld.
+
+### Openingstijden
+
+Een uitje aanraden dat die dag dicht is, is een antwoord dat klopt tot je voor de
+deur staat. Dat gebeurde ook: gevraagd naar zaterdag beval de agent het
+Geniemuseum aan, met in datzelfde antwoord de openingstijden
+`Tu-Th 10:00-16:00; Jul-Aug Su 10:00-16:00`.
+
+[opening_hours.py](mcp_server/opening_hours.py) leest die OSM-notatie nu tegen de
+gevraagde datum en zet per locatie `waarschijnlijk_open` op true, false of
+**null**. Die derde waarde is het punt: OSM's `opening_hours` is een volledige
+grammatica met feestdagen, weeknummers, zonsondergang en vrije tekst, en een
+parser die de helft snapt is gevaarlijker dan geen parser — een onterecht
+"geopend" is precies het zelfverzekerd-verkeerde antwoord waar dit project
+tegen ontworpen is. Dus: een smalle deelverzameling, en alles daarbuiten wordt
+geweigerd.
+
+Gemeten op het echte corpus: 483 van de 1903 locaties hebben openingstijden,
+waarvan 85% leesbaar is voor deze lezer, en op zaterdag 29 augustus staan er 31
+op dicht. Feestdagen worden bewust niet meegerekend, en dat staat in de caveats
+van het antwoord.
 
 ## Weer-API en authenticatie
 
@@ -98,7 +119,7 @@ cd mcp_server && python weather_mcp_server.py  # MCP op http://localhost:8000
 De vijf weertools werken zonder Databricks-login; alleen `find_activities` heeft de
 Lakebase-secret nodig.
 
-Testen (158 tests, geen netwerk, geen database):
+Testen (183 tests, geen netwerk, geen database):
 
 ```bash
 pytest tests -q
@@ -230,7 +251,7 @@ Aangepast, met reden:
   — Databricks App-configuratie
 - [agent/system_prompt.md](agent/system_prompt.md) — de systeemprompt, met
   verantwoording
-- [tests/](tests/) — 158 tests, geen netwerk
+- [tests/](tests/) — 183 tests, geen netwerk
 
 ## Een detail dat ik bijna miste
 

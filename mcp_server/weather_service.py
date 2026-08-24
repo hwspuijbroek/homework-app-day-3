@@ -38,6 +38,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+import opening_hours
 import venues as venues_module
 from geocode import GeocodingUnavailable, geocode_place
 from verdict import day_score, nl_number, outdoor_verdict
@@ -522,9 +523,25 @@ def activities(location: str, query: str | None = None, radius_km: int = 25,
             f"Het weer voor {place['display_name']} is wel op te vragen met get_outdoor_advice."
         ) from e
 
+    # Is each of these actually open that day? The corpus carries OpenStreetMap's
+    # opening_hours verbatim and nothing used to read them, so an answer could
+    # recommend a museum whose own hours in the same response said Tuesday to
+    # Thursday. `waarschijnlijk_open` is true, false, or None for "the string
+    # could not be read with confidence" — which is most of them, and honest.
+    target = _as_date(chosen.get("date"))
+    if target:
+        # By identity: a mixed venue (a castle is grounds and interior) is the
+        # same dict in both lists, so annotating it twice is wasted work.
+        for venue in {id(v): v for v in indoor + outdoor}.values():
+            venue["waarschijnlijk_open"] = opening_hours.open_on(
+                venue.get("openingstijden"), target)
+
     return {
         **_place_out(place),
         "date": chosen.get("date"),
+        # The weekday in words, so the agent can say "dat museum is op zaterdag
+        # dicht" without working out which day 2026-08-29 was.
+        "weekday": DUTCH_DAYS[target.weekday()] if target else None,
         "advice": advice,
         "reason": reason,
         # Which list to lead with, spelled out rather than left to be inferred
@@ -535,12 +552,26 @@ def activities(location: str, query: str | None = None, radius_km: int = 25,
         "outdoor": outdoor,
         "radius_km": radius,
         "query": query or None,
-        "caveats": _caveats(chosen),
+        "caveats": _caveats(chosen) + [
+            "Openingstijden komen uit OpenStreetMap en ontbreken vaak. "
+            "waarschijnlijk_open=false betekent dat de vermelde tijden deze dag "
+            "uitsluiten, null betekent onbekend — zeg dan dat het onbekend is in "
+            "plaats van een openingstijd aan te nemen. Feestdagen zijn niet "
+            "meegerekend."
+        ],
         "source": "Buienradar + Wikidata/Wikipedia & OpenStreetMap (via Lakebase)",
     }
 
 
 # --- shared shaping -----------------------------------------------------------
+
+def _as_date(value: str | None) -> date | None:
+    """The forecast's date string as a date, or None if it is missing or odd."""
+    try:
+        return date.fromisoformat(value) if value else None
+    except (TypeError, ValueError):
+        return None
+
 
 def _place_out(place: dict) -> dict:
     """

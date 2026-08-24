@@ -513,3 +513,56 @@ def test_a_genuinely_good_winner_carries_no_warning():
     out = weather_service.best_day("Drunen")
     assert out["best_is_outdoor_worthy"] is True
     assert out["note"] is None
+
+
+# --- opening hours ------------------------------------------------------------
+
+def _venues_with_hours(hours):
+    def fake(lat, lon, radius_km=25, limit=8, query_text=None, categories=None):
+        museum = {"name": "Geniemuseum", "shelter": "binnen", "distance_km": 9.2,
+                  "openingstijden": hours}
+        castle = {"name": "Kasteel d'Oultremont", "shelter": "gemengd",
+                  "distance_km": 2.7, "openingstijden": None}
+        return ([museum, castle], [castle])
+    return fake
+
+
+def test_a_venue_closed_on_the_asked_day_is_flagged(monkeypatch):
+    """
+    The failure this exists for: asked what to do on a Saturday, an agent
+    recommended a museum whose own hours in the same response said Tu-Th.
+    """
+    monkeypatch.setattr(weather_service.venues_module, "nearby_venues",
+                        _venues_with_hours("Tu-Th 10:00-16:00"))
+    saturday = next(TODAY + timedelta(days=n) for n in range(7)
+                    if (TODAY + timedelta(days=n)).weekday() == 5)
+    FakeWeatherClient.days = [forecast_day(TODAY + timedelta(days=n)) for n in range(8)]
+
+    out = weather_service.activities("Drunen", day=saturday.isoformat())
+    museum = next(v for v in out["indoor"] if v["name"] == "Geniemuseum")
+    assert museum["waarschijnlijk_open"] is False
+    assert out["weekday"] == "zaterdag"
+
+
+def test_unknown_hours_stay_unknown(monkeypatch):
+    """Most venues have none, and "onbekend" is a useful thing to be told."""
+    monkeypatch.setattr(weather_service.venues_module, "nearby_venues",
+                        _venues_with_hours(None))
+    out = weather_service.activities("Drunen")
+    assert all(v["waarschijnlijk_open"] is None for v in out["indoor"])
+
+
+def test_a_mixed_venue_is_annotated_once_and_shows_in_both_lists(monkeypatch):
+    monkeypatch.setattr(weather_service.venues_module, "nearby_venues",
+                        _venues_with_hours("24/7"))
+    out = weather_service.activities("Drunen")
+    castle_in = next(v for v in out["indoor"] if v["name"].startswith("Kasteel"))
+    castle_out = next(v for v in out["outdoor"] if v["name"].startswith("Kasteel"))
+    assert castle_in is castle_out                      # the same dict, annotated once
+    assert "waarschijnlijk_open" in castle_in
+
+
+def test_the_caveat_says_what_null_means(monkeypatch):
+    monkeypatch.setattr(weather_service.venues_module, "nearby_venues",
+                        _venues_with_hours(None))
+    assert any("Feestdagen" in c for c in weather_service.activities("Drunen")["caveats"])
