@@ -1,0 +1,17 @@
+# Dev-container dependencies.
+#
+# Mirrors mcp_server/requirements.txt — the file the deployed Databricks App
+# actually installs — so what you test in the container is what runs in the app.
+# When you change one, change both; there is no shared package to import from,
+# because a Databricks App deploys from its own folder (see the reference
+# project's note on duplicating alpaca_broker.py for the same reason).
+#
+# torch and sentence-transformers are only needed by find_activities: the venue
+# search encodes the question with the same model Day 2 embedded the corpus
+# with. Every weather tool works without them.
+fastmcp==3.4.7
+requests==2.34.2
+psycopg2-binary==2.9.12
+databricks-sdk==0.133.0
+sentence-transformers==5.7.0
+torch==2.13.0

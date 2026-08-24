@@ -1,0 +1,26 @@
+# Databricks App configuration for the weather + days-out MCP server.
+#
+# `python weather_mcp_server.py` rather than gunicorn: FastMCP serves its own
+# ASGI app over streamable HTTP, and that is the transport the Databricks MCP
+# gateway connects to. The entrypoint reads DATABRICKS_APP_PORT, which Apps
+# injects, so no port is configured here.
+command:
+  - "python"
+  - "weather_mcp_server.py"
+
+resources:
+  - name: requirements
+    source:
+      path: ./requirements.txt
+
+env:
+  # Lakebase connection secret, reused from Day 2 — the venue corpus lives there.
+  # Only find_activities needs it; every weather tool works without a database.
+  - name: LAKEBASE_SECRET_SCOPE
+    value: "database"
+  - name: LAKEBASE_SECRET_KEY
+    value: "lakebase-url"
+  # Keep the HuggingFace cache on a writable path so the venue embedding model
+  # isn't re-downloaded into an unpredictable location on every cold start.
+  - name: HF_HOME
+    value: "/tmp/.cache/huggingface"

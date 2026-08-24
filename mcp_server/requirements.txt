@@ -1,0 +1,21 @@
+# Runtime dependencies for the weather MCP server Databricks App.
+#
+# A Databricks App installs the requirements.txt next to its own app.yaml, so
+# this file — not the one in the repo root — is what the deployed server gets.
+#
+# Pinned exactly, not `>=` like the reference project. Every deploy re-resolves
+# this file, and two of these lines decide what the stored vectors *mean*:
+# poi_embeddings.model_name records a model name, not a version, so a silent
+# sentence-transformers or weights bump makes the 384-dimension vectors in the
+# table and the vectors a question is encoded into come from different spaces.
+# The result is plausible numbers and a meaningless ranking. These two versions
+# are the ones Day 2's corpus was embedded with; raise them only together with a
+# re-run of ingest_poi.py.
+fastmcp==3.4.7
+requests==2.34.2
+psycopg2-binary==2.9.12
+databricks-sdk==0.133.0
+sentence-transformers==5.7.0
+# Without the local +cpu tag: that suffix is how the dev container happens to
+# have it, and pip cannot resolve it from PyPI during the app build.
+torch==2.13.0

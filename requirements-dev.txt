@@ -1,0 +1,6 @@
+-r requirements.txt
+pytest==9.1.1
+# Stubs Nominatim in the geocoding tests, so the "unknown place" and "service
+# down" paths are testable without a network — they are the two failures the
+# agent has to tell apart.
+responses==0.26.2

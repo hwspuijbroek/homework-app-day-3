@@ -1,0 +1,57 @@
+{
+  "name": "Weather MCP Server + Agent Bricks (Databricks)",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11-bookworm",
+
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    }
+  },
+
+  "containerEnv": {
+    "PYTHONUNBUFFERED": "1",
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    // The reference server reads DATABRICKS_APP_PORT, then PORT, then falls
+    // back to 8000 (mcp_server/alpaca_mcp_server.py). Databricks Apps inject
+    // DATABRICKS_APP_PORT themselves; setting PORT here means a locally run
+    // server lands on the same 8000 without a second code path.
+    "PORT": "8000"
+  },
+
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": {
+      "label": "Weather MCP server",
+      "onAutoForward": "notify"
+    }
+  },
+
+  // Reuse host Databricks credentials. initializeCommand guarantees the file
+  // exists, otherwise Docker would create a directory at that path.
+  "initializeCommand": "touch ${localEnv:HOME}/.databrickscfg",
+  "mounts": [
+    "source=${localEnv:HOME}/.databrickscfg,target=/home/vscode/.databrickscfg,type=bind,consistency=cached"
+  ],
+
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "databricks.databricks",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["tests"]
+      }
+    }
+  },
+
+  "remoteUser": "vscode"
+}
