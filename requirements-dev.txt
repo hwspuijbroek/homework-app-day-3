@@ -1,6 +1,10 @@
 -r requirements.txt
 pytest==9.1.1
-# Stubs Nominatim in the geocoding tests, so the "unknown place" and "service
-# down" paths are testable without a network — they are the two failures the
-# agent has to tell apart.
+# Stubs Nominatim and Buienradar in the tests, so the "unknown place", "service
+# down" and forecast-parsing paths are testable without a network.
 responses==0.26.2
+# Not for a coverage target — for finding the places nobody tested. It is how
+# the untested forecast parser surfaced: 94-98% everywhere I had written code,
+# 59% on the module that turns Buienradar's blocks into the day dicts the whole
+# verdict rests on.
+pytest-cov==7.1.0

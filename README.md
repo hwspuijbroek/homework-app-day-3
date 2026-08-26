@@ -119,7 +119,7 @@ cd mcp_server && python weather_mcp_server.py  # MCP op http://localhost:8000
 De vijf weertools werken zonder Databricks-login; alleen `find_activities` heeft de
 Lakebase-secret nodig.
 
-Testen (183 tests, geen netwerk, geen database):
+Testen (208 tests, geen netwerk, geen database):
 
 ```bash
 pytest tests -q
@@ -127,9 +127,26 @@ pytest tests -q
 
 Wat er getest wordt: de drempelwaarden in `verdict.py`, het onderscheid tussen
 "plaats onbekend" en "dienst plat" in `geocode.py`, het combineren in
-`weather_service.py`, de SQL- en rangschikkingsregels in `venues.py`, en de
-MCP-oppervlakte zelf — dat alle zes tools registreren mét beschrijving, en dat geen
-enkele fout als exception ontsnapt.
+`weather_service.py`, de SQL- en rangschikkingsregels in `venues.py`, het lezen
+van de openingstijden, het ontleden van Buienradar's dagdelen in
+`weather_client.py`, en de MCP-oppervlakte zelf — dat alle zes tools registreren
+mét beschrijving, en dat geen enkele fout als exception ontsnapt.
+
+```bash
+pytest tests -q --cov=mcp_server --cov-report=term-missing
+```
+
+Dekking is 86%, en de verdeling is leerzamer dan het totaal: 94–98% op de
+modules die voor day 3 geschreven zijn, 87% op `weather_client.py`, en 27% op
+`lakebase.py` — dat laatste is vrijwel helemaal verbindingsherstel, dat je
+zonder echte database niet zinnig test.
+
+Die meting was geen formaliteit. `fetch_local_forecast` stond op 59% en bleek
+ongetest, terwijl het de functie is die `daytime_precipitation_mm` produceert:
+het cijfer waar de drempel van 3 mm op staat, waar `day_score` op rangschikt, en
+dat het hele verschil tussen hoeveelheid en kans draagt. De tests die Day 2
+meegaf, testten het *station*-endpoint — een ander endpoint. Dat gat is nu
+dicht, inclusief de regel dat regen in de nacht niet tegen de dag telt.
 
 ### De server als MCP-client aanspreken
 
@@ -251,7 +268,7 @@ Aangepast, met reden:
   — Databricks App-configuratie
 - [agent/system_prompt.md](agent/system_prompt.md) — de systeemprompt, met
   verantwoording
-- [tests/](tests/) — 183 tests, geen netwerk
+- [tests/](tests/) — 208 tests, geen netwerk
 
 ## Een detail dat ik bijna miste
 

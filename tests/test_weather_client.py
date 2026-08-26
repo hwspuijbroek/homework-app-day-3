@@ -188,3 +188,104 @@ def test_outlook_returns_none_without_usable_input():
     client = WeatherClient()
     assert client._normalize_outlook(None, "shortterm", "kort", "s") is None
     assert client._normalize_outlook({"forecast": ""}, "shortterm", "kort", "s") is None
+
+
+# --- fetch_weather: the station feed, assembled ------------------------------
+#
+# The tests above are Day 2's and cover the normalisers in isolation. What was
+# never tested is the assembly around them — and weather_service.stations()
+# depends on two properties of it: that station documents carry source_type
+# "forecast", and that their payload holds lat/lon. Break either and every
+# "hoe warm is het in X?" answers from the wrong end of the country, or from
+# nowhere at all.
+
+import json as _json
+
+import pytest
+import requests
+import responses
+
+from weather_client import BUIENRADAR_URL
+
+
+def _feed(stations=(), forecast_days=()):
+    """The shape of data.buienradar.nl's documented feed, trimmed to what is read."""
+    return {
+        "actual": {
+            "stationmeasurements": list(stations),
+            "sunrise": "2026-08-26T06:41:00",
+        },
+        "forecast": {
+            "fivedayforecast": list(forecast_days),
+            "weatherreport": {"title": "Zonnig", "published": "2026-08-26T10:00:00",
+                              "summary": "Rustig weer.", "text": "<p>Rustig weer.</p>"},
+            "shortterm": {"forecast": "Wisselvallig", "startdate": "2026-08-28T00:00:00",
+                          "enddate": "2026-09-01T00:00:00"},
+            "longterm": {"forecast": "Onzeker", "startdate": "2026-09-02T00:00:00",
+                         "enddate": "2026-09-06T00:00:00"},
+        },
+    }
+
+
+def _forecast_day(day="2026-08-27"):
+    return {"day": f"{day}T00:00:00", "mintemperature": "12", "maxtemperature": "24",
+            "rainChance": 20, "sunChance": 60, "windDirection": "ZW",
+            "weatherdescription": "Half bewolkt"}
+
+
+@responses.activate
+def test_every_station_becomes_a_document_with_its_coordinates():
+    """weather_service picks the nearest station by lat/lon; without them it cannot."""
+    responses.add(responses.GET, BUIENRADAR_URL, status=200, json=_feed(stations=[
+        make_station("Meetstation Gilze Rijen", lat=51.57, lon=4.93),
+        make_station("Meetstation Volkel", lat=51.65, lon=5.7),
+    ]))
+
+    documents = WeatherClient().fetch_weather()
+    stations = [d for d in documents if d["source_type"] == "forecast"]
+    assert len(stations) == 2
+
+    payload = _json.loads(stations[0]["payload"])
+    assert (payload["lat"], payload["lon"]) == (51.57, 4.93)
+    assert payload["stationname"] == "Meetstation Gilze Rijen"
+
+
+@responses.activate
+def test_the_five_day_outlook_rides_along_under_its_own_source_type():
+    responses.add(responses.GET, BUIENRADAR_URL, status=200, json=_feed(
+        stations=[make_station()],
+        forecast_days=[_forecast_day("2026-08-27"), _forecast_day("2026-08-28")]))
+
+    kinds = [d["source_type"] for d in WeatherClient().fetch_weather()]
+    assert kinds.count("forecast_daily") == 2
+    # The prose documents too — Day 2 retrieves over these; Day 3 ignores them,
+    # and neither should be surprised by the other's rows.
+    assert "national_report" in kinds and kinds.count("outlook") == 2
+
+
+@responses.activate
+def test_a_station_without_a_name_or_timestamp_is_dropped_not_half_parsed():
+    responses.add(responses.GET, BUIENRADAR_URL, status=200, json=_feed(stations=[
+        make_station("Meetstation Volkel"),
+        {"stationname": "", "timestamp": "2026-08-26T12:00:00"},
+        {"stationname": "Meetstation Zonder Tijd", "timestamp": ""},
+    ]))
+
+    stations = [d for d in WeatherClient().fetch_weather() if d["source_type"] == "forecast"]
+    assert [d["location"] for d in stations] == ["Meetstation Volkel"]
+
+
+@responses.activate
+def test_an_empty_feed_yields_no_stations_rather_than_raising():
+    """An outage that returns 200 with nothing in it is still an outage."""
+    responses.add(responses.GET, BUIENRADAR_URL, status=200,
+                  json={"actual": {}, "forecast": {}})
+    assert [d for d in WeatherClient().fetch_weather()
+            if d["source_type"] == "forecast"] == []
+
+
+@responses.activate
+def test_an_http_error_is_raised_for_the_service_layer_to_translate():
+    responses.add(responses.GET, BUIENRADAR_URL, status=502)
+    with pytest.raises(requests.HTTPError):
+        WeatherClient().fetch_weather()
