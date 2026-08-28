@@ -53,6 +53,7 @@ from fastmcp import FastMCP
 
 import weather_service
 from weather_service import (
+    DayWordNotUnderstood,
     LocationUnknown,
     NoForecastForDay,
     ServiceUnavailable,
@@ -71,16 +72,24 @@ def _failure(tool: str, exception: Exception) -> dict:
     `reason` is a stable machine-readable code the system prompt can be written
     against; `error` is the sentence to show the user.
 
-    The three named exceptions carry messages written to be read by a person, so
-    they are passed through. Anything else is logged with its traceback here and
+    The named exceptions carry messages written to be read by a person, so they
+    are passed through. Anything else is logged with its traceback here and
     reported as a fixed sentence: an unexpected exception's text is whatever some
     library chose to put in it — a connection string, a hostname, a row of data —
     and everything the agent is told can end up in its answer.
+
+    NoForecastForDay and DayWordNotUnderstood get different reason codes on
+    purpose: the first means the date is real but outside the 7-day forecast,
+    the second means the word itself was never resolved to a date. Collapsing
+    them once already produced an agent that told a user asking about
+    "morgenochtend" that the forecast only reaches seven days out.
     """
     if isinstance(exception, LocationUnknown):
         return {"error": str(exception), "reason": "location_unknown"}
     if isinstance(exception, ServiceUnavailable):
         return {"error": str(exception), "reason": "service_unavailable"}
+    if isinstance(exception, DayWordNotUnderstood):
+        return {"error": str(exception), "reason": "day_not_understood"}
     if isinstance(exception, NoForecastForDay):
         return {"error": str(exception), "reason": "date_out_of_range"}
 
@@ -206,7 +215,11 @@ def get_outdoor_advice(location: str, day: str | None = None) -> dict:
     verdict turned on — and repeat the relevant entry from `caveats` instead of
     presenting a whole-day verdict as certainty. A date beyond the 7-day horizon
     comes back as an error with reason 'date_out_of_range'; say that the
-    forecast does not reach that far rather than estimating it.
+    forecast does not reach that far rather than estimating it. A `day` that
+    wasn't recognised at all (a past day, a typo, something not in the list
+    below) comes back as 'day_not_understood' instead — a different problem,
+    and worth telling apart: ask the user to rephrase using one of the
+    accepted words rather than talking about the 7-day horizon.
 
     Args:
         location: A Dutch place name.

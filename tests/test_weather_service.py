@@ -18,6 +18,7 @@ import weather_service
 from geocode import GeocodingUnavailable
 from weather_service import (
     AMSTERDAM,
+    DayWordNotUnderstood,
     LocationUnknown,
     NoForecastForDay,
     ServiceUnavailable,
@@ -151,9 +152,29 @@ def test_a_day_past_the_horizon_raises_instead_of_returning_the_nearest_one():
 
 def test_an_unparseable_day_says_what_it_accepts():
     days = [forecast_day(TODAY)]
-    with pytest.raises(NoForecastForDay) as excinfo:
+    with pytest.raises(DayWordNotUnderstood) as excinfo:
         weather_service.resolve_day(days, "volgende zomer")
     assert "JJJJ-MM-DD" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("word", ["morgenochtend", "morgenmiddag", "morgenavond",
+                                  "morgennacht"])
+def test_morgen_with_a_daypart_still_means_tomorrow(word):
+    """
+    Without the daypart suffix in the regex, \\bmorgen\\b does not match inside
+    "morgenochtend" (no boundary between "morgen" and "ochtend"), so this used
+    to fall through to DayWordNotUnderstood instead of resolving to tomorrow.
+    """
+    days = [forecast_day(TODAY), forecast_day(TOMORROW)]
+    assert weather_service.resolve_day(days, word)["date"] == TOMORROW.isoformat()
+
+
+@pytest.mark.parametrize("word", ["gisteren", "eergisteren"])
+def test_a_past_day_gets_its_own_message_not_a_generic_one(word):
+    days = [forecast_day(TODAY)]
+    with pytest.raises(DayWordNotUnderstood) as excinfo:
+        weather_service.resolve_day(days, word)
+    assert "verleden" in str(excinfo.value)
 
 
 def test_an_empty_forecast_raises():
@@ -460,7 +481,7 @@ def test_a_weekend_outside_the_horizon_says_so_rather_than_guessing():
 
 
 def test_a_word_it_does_not_know_lists_what_it_accepts():
-    with pytest.raises(NoForecastForDay) as excinfo:
+    with pytest.raises(DayWordNotUnderstood) as excinfo:
         weather_service.resolve_day(week(), "sint-juttemis")
     assert "weekdag" in str(excinfo.value)
 

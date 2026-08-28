@@ -15,7 +15,12 @@ import asyncio
 import pytest
 
 import weather_mcp_server as server
-from weather_service import LocationUnknown, NoForecastForDay, ServiceUnavailable
+from weather_service import (
+    DayWordNotUnderstood,
+    LocationUnknown,
+    NoForecastForDay,
+    ServiceUnavailable,
+)
 
 TOOLS = {
     "get_current_weather": lambda: server.get_current_weather("Drunen"),
@@ -89,6 +94,7 @@ def test_location_is_required_everywhere_and_the_rest_is_optional(registered):
     (LocationUnknown("geen Nederlandse plaats"), "location_unknown"),
     (ServiceUnavailable("Buienradar antwoordde niet"), "service_unavailable"),
     (NoForecastForDay("valt buiten de verwachting"), "date_out_of_range"),
+    (DayWordNotUnderstood("is geen dag die ik begrijp"), "day_not_understood"),
     (RuntimeError("iets onverwachts"), "internal_error"),
 ])
 def test_each_failure_becomes_its_own_reason_code(monkeypatch, tool_name,

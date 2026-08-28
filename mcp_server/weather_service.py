@@ -70,6 +70,11 @@ DUTCH_DAYS = ("maandag", "dinsdag", "woensdag", "donderdag", "vrijdag",
 TODAY_WORDS = ("vandaag", "vanochtend", "vanmorgen", "vanmiddag", "vanavond",
                "vannacht")
 
+# There is no forecast for these — Buienradar starts at today — and a word
+# that names a day but means "already happened" deserves a different message
+# than "I didn't recognise this word at all".
+PAST_WORDS = ("gisteren", "eergisteren")
+
 # Both caches are process-local and short. Buienradar updates roughly every ten
 # minutes, and one agent conversation easily produces four tool calls about the
 # same town — the forecast key is rounded to ~1 km so those share a fetch.
@@ -88,7 +93,18 @@ class ServiceUnavailable(Exception):
 
 
 class NoForecastForDay(Exception):
-    """The requested date is outside the days the forecast covers."""
+    """The requested date is a real date but falls outside what the forecast covers."""
+
+
+class DayWordNotUnderstood(Exception):
+    """
+    `day` didn't resolve to a date at all — a different problem from
+    NoForecastForDay, and worth telling apart: this project already collapsed
+    that distinction once, and it produced an agent that told a user asking
+    about "morgenochtend" that the forecast only reaches seven days out, when
+    the real problem was that the word was never recognised in the first
+    place. Kept separate so the two get different, honest messages.
+    """
 
 
 # --- resolving the two things every tool needs -------------------------------
@@ -179,7 +195,11 @@ def _target_date(wanted: str, days: list[dict], today: date) -> date | None:
         return today
     if "overmorgen" in wanted:
         return today + timedelta(days=2)
-    if re.search(r"\bmorgen\b", wanted):
+    # The optional daypart suffix matters: a bare \bmorgen\b does not match
+    # inside "morgenochtend" (no boundary between "morgen" and "ochtend"), so
+    # without it "morgenochtend" fell through everything below and came back
+    # as an unrecognised word — not as tomorrow.
+    if re.search(r"\bmorgen(ochtend|middag|avond|nacht)?\b", wanted):
         return today + timedelta(days=1)
 
     for index, name in enumerate(DUTCH_DAYS):
@@ -199,7 +219,12 @@ def _target_date(wanted: str, days: list[dict], today: date) -> date | None:
             None,
         )
 
-    raise NoForecastForDay(
+    if any(word in wanted for word in PAST_WORDS):
+        raise DayWordNotUnderstood(
+            f"'{wanted}' ligt in het verleden; de verwachting begint vandaag, "
+            f"er is geen weerdata voor eerdere dagen")
+
+    raise DayWordNotUnderstood(
         f"'{wanted}' is geen dag die ik begrijp; gebruik JJJJ-MM-DD, een weekdag "
         f"('zaterdag'), 'vandaag', 'morgen', 'overmorgen' of 'weekend'")
 
