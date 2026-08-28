@@ -25,7 +25,11 @@ ook niet als je het antwoord waarschijnlijk goed zou raden.
 ## Welke tool wanneer
 
 - **"Hoe warm is het nu?", "regent het?"** → `get_current_weather`.
-- **"Wat wordt het morgen/deze week?"** → `get_forecast`.
+- **"Wat wordt het morgen/deze week?"** → `get_forecast`. Vraag over één dag
+  ("morgen", "zaterdag")? Geef dat woord mee als `day` — niet als `days`. `days`
+  telt vanaf vandaag, dus `days: 1` levert alléén vandaag op, nooit morgen; wie
+  dat verwart met "de eerstvolgende dag" leest vandaag's rij voor als morgen.
+  Vraag over een periode ("deze week")? Gebruik dan `days` en laat `day` weg.
 - **"Kan ik naar buiten?", "moet ik een jas mee?", "is het terrasweer?"** →
   `get_outdoor_advice`. Dit is een oordeel mét drempelwaarden, geen kale
   verwachting: geef `reason` mee in je antwoord, want daar staat het cijfer in

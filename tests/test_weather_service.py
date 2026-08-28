@@ -244,6 +244,18 @@ def test_the_horizon_reaches_every_weekday_from_any_weekday():
         assert weather_service.resolve_day(days, name)["date"]
 
 
+def test_asking_forecast_for_a_day_word_returns_that_single_date():
+    FakeWeatherClient.days = [forecast_day(TODAY), forecast_day(TOMORROW)]
+    out = weather_service.forecast("Drunen", day="morgen")
+    assert [d["date"] for d in out["days"]] == [TOMORROW.isoformat()]
+
+
+def test_forecast_day_word_ignores_the_days_count():
+    FakeWeatherClient.days = [forecast_day(TODAY), forecast_day(TOMORROW)]
+    out = weather_service.forecast("Drunen", days=7, day="morgen")
+    assert len(out["days"]) == 1
+
+
 def test_both_rain_figures_survive_into_the_output():
     """The amount and the chance answer different questions; dropping one is the bug."""
     FakeWeatherClient.days = [forecast_day(TODAY, daytime_precipitation_mm=4.2, rain_chance=55)]

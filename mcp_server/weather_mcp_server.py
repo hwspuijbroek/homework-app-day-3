@@ -124,9 +124,17 @@ def get_current_weather(location: str) -> dict:
 
 
 @mcp.tool
-def get_forecast(location: str, days: int = 7) -> dict:
+def get_forecast(location: str, days: int = 7, day: str | None = None) -> dict:
     """
     Get the multi-day forecast for a Dutch place, today first. Netherlands only.
+
+    Asked about a single day ("morgen", "zaterdag", "dit weekend")? Pass it as
+    `day`, the same word `get_outdoor_advice` and `get_rain_timing` take — do not
+    translate it into a `days` count yourself. `days` counts forward from today,
+    so days=1 returns *today* only ("today first"); asked about tomorrow, that
+    row is one day short of the one you want, and nothing about the response
+    signals the mismatch. `day` resolves the date server-side and returns just
+    that row instead.
 
     Two rain figures come back per day and they answer different questions:
     daytime_precipitation_mm is how much rain is expected during the day, and
@@ -153,9 +161,13 @@ def get_forecast(location: str, days: int = 7) -> dict:
 
     Args:
         location: A Dutch place name, e.g. "Utrecht".
-        days: How many days to return, 1-7 (default 7). Buienradar publishes
-            further out than that, but as prose rather than as numbers, so this
-            stops where the figures stop. Values outside the range are clamped.
+        days: How many days to return, 1-7 (default 7), counted from today.
+            Buienradar publishes further out than that, but as prose rather
+            than as numbers, so this stops where the figures stop. Values
+            outside the range are clamped. Ignored when `day` is given.
+        day: A single day to resolve instead — an ISO date, a weekday
+            ("zaterdag"), "vandaag", "morgen", "overmorgen", or "weekend".
+            Returns a one-entry `days[]` for that date and ignores `days`.
 
     Returns:
         location, province, ambiguous_name, today, days[] (date, description,
@@ -164,7 +176,7 @@ def get_forecast(location: str, days: int = 7) -> dict:
         is_partial), source — or error + reason on failure.
     """
     try:
-        return weather_service.forecast(location, days)
+        return weather_service.forecast(location, days, day)
     except Exception as e:
         return _failure("get_forecast", e)
 

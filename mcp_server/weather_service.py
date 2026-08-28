@@ -299,16 +299,31 @@ def current_conditions(location: str) -> dict:
     }
 
 
-def forecast(location: str, days: int = 5) -> dict:
-    """The multi-day outlook for `location`, today first."""
+def forecast(location: str, days: int = 5, day: str | None = None) -> dict:
+    """
+    The multi-day outlook for `location`, today first.
+
+    `day` resolves the same words as outdoor_advice/rain_timing ("morgen",
+    "zaterdag", "weekend", an ISO date) and returns just that one row, ignoring
+    `days`. Measured failure this replaced: asked "wat is het weer morgen",
+    an agent had no day argument to pass, so it requested days=1 — which is
+    *today* only, "today first" — and read that lone row back as tomorrow's.
+    Nothing raised; the numbers were real, just for the wrong date.
+    """
     place = resolve_location(location)
     data = local_forecast(place["lat"], place["lon"])
-    wanted = max(1, min(int(days), FORECAST_HORIZON_DAYS))
+
+    if day is not None and str(day).strip():
+        chosen = resolve_day(data.get("days", []), day)
+        rows = [chosen]
+    else:
+        wanted = max(1, min(int(days), FORECAST_HORIZON_DAYS))
+        rows = data.get("days", [])[:wanted]
 
     return {
         **_place_out(place),
         "today": datetime.now(AMSTERDAM).date().isoformat(),
-        "days": [_day_out(day) for day in data.get("days", [])[:wanted]],
+        "days": [_day_out(d) for d in rows],
         "source": "Buienradar (forecast.buienradar.nl)",
     }
 
