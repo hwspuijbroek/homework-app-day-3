@@ -128,6 +128,24 @@ def _warn_if_vectors_do_not_match(model):
 
 
 
+def _first_sentences(text, count=2):
+    """
+    The first `count` sentences of `text`, or None if there is nothing to show.
+
+    `narrative_text` is what the embeddings are built from — real,
+    Wikipedia-derived prose for the Wikidata-sourced venues, a short template
+    sentence for OpenStreetMap ones — up to ~3300 characters for the longest
+    articles. Returning it whole would make every one of up to eight results
+    carry a paragraph; two sentences is enough for "vertel me meer" without
+    turning a venue list into an essay.
+    """
+    if not text:
+        return None
+    sentences = text.split(". ")[:count]
+    trimmed = ". ".join(sentences).rstrip(". ").strip()
+    return f"{trimmed}." if trimmed else None
+
+
 def nearby_venues(lat, lon, radius_km=25, limit=8, query_text=None,
                    categories=None):
     """
@@ -173,7 +191,8 @@ def nearby_venues(lat, lon, radius_km=25, limit=8, query_text=None,
         with conn.cursor() as cur:
             if embedding is None:
                 cur.execute("""
-                    SELECT id, location, source_type, headline, payload, lat, lon,
+                    SELECT id, location, source_type, headline, payload,
+                           narrative_text, lat, lon,
                            NULL::float AS similarity
                     FROM poi_documents
                     WHERE lat BETWEEN %s AND %s AND lon BETWEEN %s AND %s
@@ -190,7 +209,7 @@ def nearby_venues(lat, lon, radius_km=25, limit=8, query_text=None,
                 # same places, with an unscored one simply ranking last.
                 cur.execute("""
                     SELECT d.id, d.location, d.source_type, d.headline, d.payload,
-                           d.lat, d.lon,
+                           d.narrative_text, d.lat, d.lon,
                            MAX(1 - (e.embedding <=> %s::vector)) AS similarity
                     FROM poi_documents d
                     LEFT JOIN poi_embeddings e
@@ -205,7 +224,7 @@ def nearby_venues(lat, lon, radius_km=25, limit=8, query_text=None,
                           AND e.model_name = %s
                     WHERE d.lat BETWEEN %s AND %s AND d.lon BETWEEN %s AND %s
                     GROUP BY d.id, d.location, d.source_type, d.headline,
-                             d.payload, d.lat, d.lon
+                             d.payload, d.narrative_text, d.lat, d.lon
                 """, (embedding, POI_MODEL_NAME) + box)
             rows = cur.fetchall()
 
@@ -244,6 +263,7 @@ def nearby_venues(lat, lon, radius_km=25, limit=8, query_text=None,
             'openingstijden': payload.get('opening_hours'),
             'website': payload.get('website'),
             'rolstoeltoegankelijk': payload.get('wheelchair') == 'yes',
+            'beschrijving': _first_sentences(row.get('narrative_text')),
             'bron': payload.get('bron') or 'Wikipedia & Wikidata',
             'qid': payload.get('qid'),
             'part_of': payload.get('part_of'),

@@ -376,8 +376,12 @@ def find_activities(location: str, query: str | None = None, radius_km: int = 25
         location, date, advice, reason, lead_with, indoor[], outdoor[],
         radius_km, query, caveats, source. Each venue: name, type, shelter,
         town, distance_km, lat, lon, url, openingstijden, website,
-        rolstoeltoegankelijk, bron, qid, part_of, similarity — or error + reason
-        on failure.
+        rolstoeltoegankelijk, beschrijving, bron, qid, part_of, similarity — or
+        error + reason on failure. `beschrijving` is a one-to-two-sentence
+        excerpt (Wikipedia-derived for most venues, a short OpenStreetMap-based
+        line otherwise) — real, sourced text, not a summary you write yourself.
+        It is None when nothing was seeded for that venue; say so rather than
+        inventing one.
     """
     try:
         return weather_service.activities(location, query, radius_km, day, limit)

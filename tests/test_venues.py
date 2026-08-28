@@ -66,13 +66,14 @@ def database(monkeypatch):
 
 
 def row(name, lat=51.68, lon=5.13, source_type="poi_indoor", similarity=None,
-        type_label="museum", town="Drunen", as_json=False):
+        type_label="museum", town="Drunen", as_json=False, narrative_text=None):
     payload = {"type_label": type_label, "town": town,
                "wikipedia_url": f"https://nl.wikipedia.org/wiki/{name}",
                "bron": "Wikipedia & Wikidata"}
     return {"id": name.lower(), "location": name, "source_type": source_type,
             "headline": name, "lat": lat, "lon": lon, "similarity": similarity,
-            "payload": json.dumps(payload) if as_json else payload}
+            "payload": json.dumps(payload) if as_json else payload,
+            "narrative_text": narrative_text}
 
 
 # --- shelter classification ---------------------------------------------------
@@ -135,6 +136,36 @@ def test_a_payload_stored_as_json_text_is_parsed(database):
     inside, _ = venues.nearby_venues(51.68, 5.13)
     assert inside[0]["type"] == "museum"
     assert inside[0]["town"] == "Drunen"
+
+
+# --- description excerpt -------------------------------------------------------
+
+def test_beschrijving_is_the_first_two_sentences_of_narrative_text(database):
+    text = ("Ecomare is een aquarium in Texel. Het combineert opvang van "
+            "zeehonden en vogels met een natuurmuseum. Vijftien zeehonden "
+            "worden er permanent opgevangen.")
+    database["use"]([row("Ecomare", narrative_text=text)])
+    inside, _ = venues.nearby_venues(51.68, 5.13)
+    assert inside[0]["beschrijving"] == (
+        "Ecomare is een aquarium in Texel. Het combineert opvang van "
+        "zeehonden en vogels met een natuurmuseum.")
+
+
+def test_beschrijving_is_none_without_narrative_text(database):
+    database["use"]([row("Bowlingcenter", narrative_text=None)])
+    inside, _ = venues.nearby_venues(51.68, 5.13)
+    assert inside[0]["beschrijving"] is None
+
+
+@pytest.mark.parametrize("text,expected", [
+    (None, None),
+    ("", None),
+    ("Eén zin zonder punt op het eind", "Eén zin zonder punt op het eind."),
+    ("Twee zinnen. Precies twee.", "Twee zinnen. Precies twee."),
+    ("Drie zinnen. Wordt afgekapt. Na de tweede.", "Drie zinnen. Wordt afgekapt."),
+])
+def test_first_sentences(text, expected):
+    assert venues._first_sentences(text) == expected
 
 
 # --- semantic ranking ---------------------------------------------------------
