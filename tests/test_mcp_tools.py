@@ -153,3 +153,38 @@ def test_the_tools_pass_their_arguments_through_unchanged(monkeypatch):
 
     assert seen == {"location": "Drunen", "query": "iets met dieren",
                     "radius_km": 30, "day": "morgen", "limit": 5}
+
+
+# --- startup warm-up ----------------------------------------------------------
+
+def test_the_warm_up_swallows_its_own_failure(monkeypatch, caplog):
+    """
+    It runs on a daemon thread nobody waits for. Anything it raises would vanish
+    into a dead thread, and the lazy path in venues.py still works, so the only
+    correct behaviour is to log and carry on.
+    """
+    import venues
+
+    def boom():
+        raise RuntimeError("no network for the model download")
+
+    monkeypatch.setattr(venues, "poi_embedding_model", boom)
+    server.warm_embedding_model()          # must not raise
+
+    assert "find_activities" in caplog.text
+
+
+def test_the_warm_up_reports_how_long_it_took(monkeypatch, caplog):
+    """
+    The 23-second first call was found by a human waiting for it. A line in the
+    log is where that belongs.
+    """
+    import logging
+
+    import venues
+
+    monkeypatch.setattr(venues, "poi_embedding_model", lambda: object())
+    with caplog.at_level(logging.INFO):
+        server.warm_embedding_model()
+
+    assert "ready in" in caplog.text

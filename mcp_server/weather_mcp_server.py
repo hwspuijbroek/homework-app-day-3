@@ -46,6 +46,8 @@ Run locally:
 
 import logging
 import os
+import threading
+import time
 
 from fastmcp import FastMCP
 
@@ -358,7 +360,44 @@ def find_activities(location: str, query: str | None = None, radius_km: int = 25
         return _failure("find_activities", e)
 
 
+def warm_embedding_model() -> None:
+    """
+    Load the venue embedding model now, so the first visitor does not wait for it.
+
+    Measured on a cold container: the first find_activities call carrying a
+    query took 23 seconds, because that call was also downloading 470 MB of
+    model weights and loading torch. Every later call answered instantly. A
+    demo, or a first impression, is exactly the call that pays it.
+
+    Runs in a daemon thread, so the server is answering MCP requests while this
+    happens and a hung download can never keep the process alive. Failure is
+    logged and otherwise ignored: the lazy path in venues.py still works, and if
+    the model cannot be loaded at all, the venue search falls back to ranking by
+    distance rather than failing.
+
+    Set SKIP_MODEL_WARMUP=1 to skip it — useful locally, where the download is
+    not worth it for a run that only touches the weather tools.
+    """
+    started = time.monotonic()
+    try:
+        import venues
+
+        venues.poi_embedding_model()
+        logger.info("Venue embedding model ready in %.1fs", time.monotonic() - started)
+    except Exception:
+        # Deliberately broad: this runs on a thread nobody is waiting for, and
+        # anything it raises would otherwise vanish into a dead thread.
+        logger.warning(
+            "Warming the venue embedding model failed after %.1fs; the first "
+            "find_activities call will load it instead",
+            time.monotonic() - started, exc_info=True)
+
+
 if __name__ == "__main__":
+    if os.getenv("SKIP_MODEL_WARMUP") != "1":
+        threading.Thread(target=warm_embedding_model,
+                         name="warm-embedding-model", daemon=True).start()
+
     # Databricks Apps route external HTTP traffic to this port via app.yaml, and
     # streamable-http is the transport the Databricks MCP client/gateway expects
     # (see the "host your own MCP" doc in the module docstring). Locally the

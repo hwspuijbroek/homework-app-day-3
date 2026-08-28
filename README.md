@@ -119,7 +119,7 @@ cd mcp_server && python weather_mcp_server.py  # MCP op http://localhost:8000
 De vijf weertools werken zonder Databricks-login; alleen `find_activities` heeft de
 Lakebase-secret nodig.
 
-Testen (208 tests, geen netwerk, geen database):
+Testen (211 tests, geen netwerk, geen database):
 
 ```bash
 pytest tests -q
@@ -181,6 +181,15 @@ die netjes `service_unavailable` — wat meteen het degradatiepad laat zien.
    `LAKEBASE_SECRET_SCOPE` / `LAKEBASE_SECRET_KEY` in
    [app.yaml](mcp_server/app.yaml) aan.
 4. Deploy, en noteer de app-URL.
+
+Bij het opstarten laadt de app het embeddingmodel op een achtergrondthread. Dat
+duurt op een koude container een paar minuten (470 MB aan gewichten), maar de
+server beantwoordt intussen gewoon MCP-verzoeken — en de eerste bezoeker die een
+uitje zoekt, hoeft er niet op te wachten. Zonder die warm-up duurde die eerste
+call 23 seconden en elke volgende een fractie daarvan. In de logs staat
+`Venue embedding model ready in …`; is het misgegaan, dan staat daar waarom en
+laadt de eerste `find_activities` het model alsnog. Lokaal kun je hem overslaan
+met `SKIP_MODEL_WARMUP=1`.
 
 ## De agent bouwen
 
@@ -268,7 +277,7 @@ Aangepast, met reden:
   — Databricks App-configuratie
 - [agent/system_prompt.md](agent/system_prompt.md) — de systeemprompt, met
   verantwoording
-- [tests/](tests/) — 208 tests, geen netwerk
+- [tests/](tests/) — 211 tests, geen netwerk
 
 ## Een detail dat ik bijna miste
 
